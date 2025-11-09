@@ -1,0 +1,27 @@
+{
+    "name": "gijsbos/classparser",
+    "description": "PHP Extension Functions",
+    "keywords": [
+        "classparser"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Gijs and contributors",
+            "homepage": "https://github.com/gijsbos/classparser/graphs/contributors"
+        }
+    ],
+    "require-dev": {
+        "phpunit/phpunit": "^5.7 || ^9.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "gijsbos\\ClassParser\\": "src/"
+        }
+    },
+    "require": {
+        "gijsbos/stringfuncs": "^1.3",
+        "gijsbos/extfuncs": "^1.1"
+    }
+}
