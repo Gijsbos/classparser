@@ -68,6 +68,14 @@ class ClassObject extends \ReflectionClass
     }
 
     /**
+     * hasMethod
+     */
+    public function hasMethod(string $methodName) : bool
+    {
+        return array_key_exists($methodName, $this->methods);
+    }
+
+    /**
      * getFilePath
      */
     public function getFilePath() : string
