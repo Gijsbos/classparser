@@ -314,7 +314,7 @@ class ClassComponent
         $body = $curlyBracketOnNewline . $body . sprintf("\n%s}%s", $this->indentation, \str_repeat("\n", $this->trailingLineBreaks));
 
         // Return result
-        return sprintf("%s%s%s%sfunction %s%s%s%s", $docComment, $this->indentation, $visibility, $static, $this->name, $value, $returnType, $body);
+        return sprintf("%s%s%s%s%sfunction %s%s%s%s", $docComment, $this->attributes, $this->indentation, $visibility, $static, $this->name, $value, $returnType, $body);
     }
 
     /**

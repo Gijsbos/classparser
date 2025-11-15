@@ -289,8 +289,8 @@ abstract class ClassParser
         $classBody = self::clearMethodBodies($classBody);
 
         // Match all comments
-        preg_match_all("/^[\t ]+(?:\/\/.*|#.*|\/\*.*\*\/.*)$/m", $classBody, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
-        
+        preg_match_all("/^[\t ]+(?:\/\/.*|#[^\[].*|\/\*.*\*\/.*)$/m", $classBody, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+
         // Iterate over comments
         foreach($matches as $details)
         {
@@ -399,7 +399,7 @@ abstract class ClassParser
     private static function parseMethods(ClassObject $classObject, string $classBody, array $placeholders, string $fileContents, string $escapedFileContents, string $fileContentsNoComments) : ClassObject
     {
         // Match all functions
-        preg_match_all("/((?:[\t ]*#\[.+\][\t ]*)+)?([\t ]*)(public|private|protected)?[\s]*(static)?[\s]*function[\s]+(\w+)(\(.*?){{([0-9]+)}}/si", $classBody, $matches);
+        preg_match_all("/((?:[\t ]*#\[[^\n]+\]\\n)*)?([\t ]*)(public|private|protected)?[\s]*(static)?[\s]*function[\s]+(\w+)(\(.*?){{([0-9]+)}}/si", $classBody, $matches);
 
         // Iterate over functions
         foreach($matches[0] as $i => $match)
