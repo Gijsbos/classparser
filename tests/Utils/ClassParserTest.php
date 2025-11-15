@@ -35,7 +35,7 @@ final class ClassParserTest extends TestCase
 
     public function testGetMethodAtLine()
     {
-        $method = ClassParser::getMethodAtLine("./tests/Files/TestClass.php", 34);
+        $method = ClassParser::getMethodAtLine("./tests/Files/TestClass.php", 36);
         $result = $method->getName();
         $expectedResult = "__construct";
         $this->assertEquals($expectedResult, $result);

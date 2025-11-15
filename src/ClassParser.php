@@ -399,14 +399,14 @@ abstract class ClassParser
     private static function parseMethods(ClassObject $classObject, string $classBody, array $placeholders, string $fileContents, string $escapedFileContents, string $fileContentsNoComments) : ClassObject
     {
         // Match all functions
-        preg_match_all("/((?:[\t ]*#\[[\w+]+\][\t ]*)+)?([\t ]*)(public|private|protected)?[\s]*(static)?[\s]*function[\s]+(\w+)(\(.*?){{([0-9]+)}}/si", $classBody, $matches);
+        preg_match_all("/((?:[\t ]*#\[.+\][\t ]*)+)?([\t ]*)(public|private|protected)?[\s]*(static)?[\s]*function[\s]+(\w+)(\(.*?){{([0-9]+)}}/si", $classBody, $matches);
 
         // Iterate over functions
         foreach($matches[0] as $i => $match)
         {
             // Extract groups
             $match =            self::unescape(\placeholder_restore($match, $placeholders));
-            $attributes =       $matches[1][$i];
+            $attributes =       self::unescape($matches[1][$i]);
             $indentation =      $matches[2][$i];
             $type =             $matches[3][$i];
             $static =           $matches[4][$i];
@@ -543,14 +543,14 @@ abstract class ClassParser
     private static function parseProperties(ClassObject $classObject, string $classBody, array $placeholders, string $fileContents, string $escapedFileContents, string $fileContentsNoComments) : ClassObject
     {
         // Match all functions
-        preg_match_all("/((?:[\t ]*#\[[\w+]+\][\t ]*)+)?([\t ]*)(public|private|protected)?[\s]*(static)?[\s]*\\$([a-zA-Z0-9\_]+)(?:[\s]*=([\s]*(?:.*?)))?;(.*?)(?=\n)/si", $classBody, $matches);
+        preg_match_all("/((?:[\t ]*#\[.+\][\t ]*)+\n?)?([\t ]*)(public|private|protected)?[\s]*(static)?[\s]*\\$([a-zA-Z0-9\_]+)(?:[\s]*=([\s]*(?:.*?)))?;(.*?)(?=\n)/si", $classBody, $matches);
 
         // Iterate over functions
         foreach($matches[0] as $i => $match)
         {
             // Extract groups
             $match =                self::unescape(placeholder_restore($match, $placeholders));
-            $attributes =           $matches[1][$i];
+            $attributes =           self::unescape($matches[1][$i]);
             $indentation =          $matches[2][$i];
             $type =                 $matches[3][$i];
             $static =               $matches[4][$i];

@@ -290,7 +290,7 @@ class ClassComponent
         $static = $this->isStatic ? "static " : "";
         $value = $this->value === null ? "" : " =" . $this->value;
         $trailingLineBreaks = \str_repeat("\n", $this->trailingLineBreaks);
-        return sprintf("%s%s%s%s\$%s%s;%s%s", $docComment, $this->indentation, $visibility, $static, $this->name, $value, $this->inlineComment, $trailingLineBreaks);
+        return sprintf("%s%s%s%s%s\$%s%s;%s%s", $docComment, $this->attributes, $this->indentation, $visibility, $static, $this->name, $value, $this->inlineComment, $trailingLineBreaks);
     }
 
     /**

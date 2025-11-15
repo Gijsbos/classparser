@@ -26,7 +26,7 @@ final class TestClass extends ClassMethod
     /**
      * protected
      */
-    #[TestAttribute()]
+    #[TestAttribute("/^[\w\.\:\-\, ]*$/")]
     protected $variable3 = array("input" => "value"); # Variable 3
 
     /**
@@ -86,7 +86,7 @@ final class TestClass extends ClassMethod
         // Function comment
         return true;
     }
-    #[TestAttribute()]
+    #[TestAttribute("/^[\p{Sc}\p{L}0-9!@#%^*&()-=+;:'\",.?\n ]{1,256}$/u")]
     protected function testAttribute()
     {
         // Function comment
