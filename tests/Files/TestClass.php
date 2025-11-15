@@ -26,6 +26,7 @@ final class TestClass extends ClassMethod
     /**
      * protected
      */
+    #[TestAttribute()]
     protected $variable3 = array("input" => "value"); # Variable 3
 
     /**
@@ -81,6 +82,12 @@ final class TestClass extends ClassMethod
     #alt
     //comment
     protected function testAltComment()
+    {
+        // Function comment
+        return true;
+    }
+    #[TestAttribute()]
+    protected function testAttribute()
     {
         // Function comment
         return true;

@@ -39,6 +39,11 @@ class ClassComponent
     public $inlineComment; // constant/property definitions
 
     /**
+     * @var string attributes
+     */
+    public $attributes;
+
+    /**
      * @var null|string body
      */
     public $body;
@@ -84,6 +89,7 @@ class ClassComponent
         $this->value = $value;
         $this->docComment = $docComment !== null ? $docComment : "";
         $this->inlineComment = "";
+        $this->attributes = "";
         $this->body = "";
         $this->text = "";
         $this->returnType = "";
@@ -377,9 +383,9 @@ class ClassComponent
             // Create body
             $body = implode("", $constants) . implode("", $properties) . implode("", $methods);
         }
-        
+
         // Return result
-        return sprintf("%s%s%s%s%s%s}", $docComment, $definition, $this->name, $implementsExtends, $curlyBracketOnNewline, $body);
+        return sprintf("%s%s%s%s%s%s%s}", $docComment, $this->attributes, $definition, $this->name, $implementsExtends, $curlyBracketOnNewline, $body);
     }
 
     /**
