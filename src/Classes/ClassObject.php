@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace gijsbos\ClassParser\Classes;
 
+use InvalidArgumentException;
+
 /**
  * ClassObject
  *  The ClassObject's goal is to extract information that is not available by the ReflectionClass.
@@ -45,11 +47,37 @@ class ClassObject extends \ReflectionClass
     }
 
     /**
-     * calculateHash
+     * addDefinition
+     */
+    public function addDefinition(string $definition, null|int $definitionIndex = null)
+    {
+        if($definitionIndex !== null)
+        {
+            if($definitionIndex > (count($this->definitions) + 1))
+                throw new InvalidArgumentException("Definition index too large, cannot exceed n + 1");
+
+            $pre = array_slice($this->definitions, 0, $definitionIndex);
+            $post = array_slice($this->definitions, $definitionIndex);
+            
+            $result = [];
+            array_push($result, ...$pre);
+            array_push($result, $definition);
+            array_push($result, ...$post);
+
+            $this->definitions = $result;
+        }
+        else
+        {
+            array_push($this->definitions, $definition);
+        }
+    }
+
+    /**
+     * calculateClassObjectsHash
      *  Calculates the hash using the parsed class properties.
      *  If any method is changed, the calculated hash will differ from the bodyHash property.
      */
-    public function calculateHash()
+    public function calculateClassObjectsHash()
     {
         $count = count($this->traits) + count($this->constants) + count($this->properties) + count($this->methods);
         $merged = [];
@@ -67,7 +95,17 @@ class ClassObject extends \ReflectionClass
         }
         
         $text = implode("", array_map(fn($n) => $n->toString(), $merged));
+        return hash('sha256', $text);
+    }
 
+    /**
+     * calculateDefinitionsHash
+     *  Calculates the hash using the parsed class properties.
+     *  If any method is changed, the calculated hash will differ from the bodyHash property.
+     */
+    public function calculateDefinitionsHash()
+    {
+        $text = implode("", $this->definitions);
         return hash('sha256', $text);
     }
 
@@ -76,6 +114,8 @@ class ClassObject extends \ReflectionClass
      */
     public function toString()
     {
-        return sprintf("%s%s%s%s%s", $this->header, $this->signature, $this->openParentheses, $this->body, $this->closeParentheses);
+        $body = hash_equals($this->bodyHash, $this->calculateDefinitionsHash()) ? $this->body : implode("", $this->definitions);
+        
+        return sprintf("%s%s%s%s%s", $this->header, $this->signature, $this->openParentheses, $body, $this->closeParentheses);
     }
 }

@@ -283,8 +283,9 @@ class ClassParser extends LogEnabledClass
         $property = new ClassProperty($classObject->getName(), $matchData["name"]);
         $property->definition = $definition;
         $property->definitionIndex = $definitionIndex;
-        $property->type = $matchData["type"];
+        $property->visibility = $matchData["visibility"];
         $property->static = $matchData["static"];
+        $property->type = $matchData["type"];
         $property->value = $matchData["value"];
         
         if(preg_match("/const\s+(.+)/", $definition, $matches, PREG_OFFSET_CAPTURE))
@@ -396,7 +397,7 @@ class ClassParser extends LogEnabledClass
             }
 
             // Class Properties
-            if(preg_match("/\s+(protected|public|private)?(?:\s+(static))?\s+\\$(\w+)(?:\s*;|\s*=(?:\s*(.+?(?=;));))?(.+?(?=\n))\n/si", $parsedClassBody, $matches, PREG_OFFSET_CAPTURE))
+            if(preg_match("/\s+(protected|public|private)?(?:\s+(static))?(?:\s+(\w+))?\s+\\$(\w+)(?:\s*;|\s*=(?:\s*(.+?(?=;));))?(.+?(?=\n))\n/si", $parsedClassBody, $matches, PREG_OFFSET_CAPTURE))
             {
                 $offset = $matches[0][1];
 
@@ -407,10 +408,11 @@ class ClassParser extends LogEnabledClass
                     $matchResult = $matches;
                     $matchType = "property";
                     $matchName = $matches[3][0];
-                    $matchData["type"] = $matches[1][0];
+                    $matchData["visibility"] = $matches[1][0];
                     $matchData["static"] = $matches[2][0];
-                    $matchData["name"] = $matches[3][0];
-                    $matchData["value"] = $matches[4][0];
+                    $matchData["type"] = $matches[3][0];
+                    $matchData["name"] = $matches[4][0];
+                    $matchData["value"] = $matches[5][0];
                 }
             }
 
@@ -506,7 +508,7 @@ class ClassParser extends LogEnabledClass
                     $fileHeader = $header;
 
                 // Extract namespac
-                if(preg_match("/namespace\s+(\w+);/", $fileHeader, $namespaceMatches)) // Use fileHeader so if multiple classes are in one file, both will receive the same props
+                if(preg_match("/namespace\s+([\w\\\\]+);/i", $fileHeader, $namespaceMatches)) // Use fileHeader so if multiple classes are in one file, both will receive the same props
                 {
                     $namespace = $namespaceMatches[1];
                 }
