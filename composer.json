@@ -22,6 +22,7 @@
     },
     "require": {
         "gijsbos/stringfuncs": "^1.3",
-        "gijsbos/extfuncs": "^1.1"
+        "gijsbos/extfuncs": "^1.1",
+        "gijsbos/logging": "^1.3"
     }
 }

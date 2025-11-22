@@ -3,26 +3,62 @@ declare(strict_types=1);
 
 namespace gijsbos\ClassParser;
 
+use LogicException;
 use ReflectionClass;
-use ReflectionMethod;
-use ReflectionFunction;
-use gijsbos\ClassParser\Classes\ClassComponent;
 use gijsbos\ClassParser\Classes\ClassConstant;
 use gijsbos\ClassParser\Classes\ClassMethod;
 use gijsbos\ClassParser\Classes\ClassObject;
 use gijsbos\ClassParser\Classes\ClassProperty;
-use gijsbos\ExtFuncs\Utils\TextParser;
+use gijsbos\ClassParser\Classes\ClassTrait;
+use gijsbos\Logging\Classes\LogEnabledClass;
 
 /**
  * ClassParser
  */
-abstract class ClassParser
+class ClassParser extends LogEnabledClass
 {
     /**
      * @var array $classMapCache
      *  Contains cache of key: filePath, value: className
      */
     public static $classMapCache = [];
+
+    /**
+     * Parse vars
+     */
+    public array $methodBodies;
+    public array $commentBlocks;
+    public array $blockComments;
+    public array $slashComments;
+    public array $quotes;
+    public array $attributes;
+    public array $hashComments;
+    public array $parentheses;
+
+    /**
+     * __construct
+     */
+    public function __construct(array $opts = [])
+    {
+        parent::__construct($opts);
+
+        $this->initVars();
+    }
+
+    /**
+     * initVars
+     */
+    private function initVars()
+    {
+        $this->methodBodies = [];
+        $this->commentBlocks = [];
+        $this->blockComments = [];
+        $this->slashComments = [];
+        $this->quotes = [];
+        $this->attributes = [];
+        $this->hashComments = [];
+        $this->parentheses = [];
+    }
 
     /**
      * getClassName
@@ -76,622 +112,480 @@ abstract class ClassParser
     }
 
     /**
-     * getReflectionClass
+     * getClassBody
      */
-    public static function getReflectionClass(string $filePath, null|string &$fileContent = null, null|string &$fileContentNoComments = null) : ReflectionClass
+    private function getClassBody(string $content, array $classBodies)
     {
-        return new ReflectionClass(self::getClassName($filePath, $fileContent, $fileContentNoComments));
+        if(!preg_match("/{{(\d+)}}/", $content, $matches))
+            throw new LogicException("Could not extract class body");
+
+        return $classBodies[$matches[1]];
     }
 
     /**
-     * extractExtends
+     * reverseContent
      */
-    private static function extractExtends(string $input)
+    public function reverseContent(string $content)
     {
-        if(preg_match("/(?<!{)class.*extends\s+([a-zA-Z0-9_\\\]+)/si", $input, $matches))
-            return $matches[1];
-    
-        return null;
-    }
+        $content = preg_replace_callback("/{{parentheses-(\d+)}}/", function($matches) {
+            $index = intval($matches[1]);
+            return $this->parentheses[$index];
+        }, $content);
 
-    /**
-     * extractImplements
-     */
-    private static function extractImplements(string $input)
-    {
-        if(preg_match("/(?<!{)class.*implements\s+([a-zA-Z0-9_\\\]+)/si", $input, $matches))
-            return $matches[1];
-    
-        return null;
-    }
-
-    /**
-     * curlyBracketOnNewline
-     */
-    private static function curlyBracketOnNewline(int $startLine, string $fileContent) : bool
-    {
-        return !str_contains(trim(explode("\n", $fileContent)[$startLine - 1]), "{");
-    }
-
-    /**
-     * createClassComponent
-     */
-    private static function createClassComponent(ReflectionClass $reflectionClass, string $fileContentsNoComments) : ClassComponent
-    {
-        $classComponent = new ClassComponent(ClassComponent::NEW_CLASS, $reflectionClass->getShortName(), null, ($docComment = $reflectionClass->getDocComment()) == false ? "" : $docComment);
-        $classComponent->namespace = $reflectionClass->getNamespaceName();
-        $classComponent->isFinal = $reflectionClass->isFinal();
-        $classComponent->isAbstract = $reflectionClass->isAbstract();
-        $classComponent->isInterface = $reflectionClass->isInterface();
-        $classComponent->extends = self::extractExtends($fileContentsNoComments);
-        $classComponent->implements = self::extractImplements($fileContentsNoComments);
-        $classComponent->curlyBracketOnNewline = self::curlyBracketOnNewline($reflectionClass->getStartLine(), $fileContentsNoComments);
-        return $classComponent;
-    }
-
-    /**
-     * escape
-     */
-    private static function escape(string $fileContents) : string
-    {
-        $fileContents = TextParser::replaceCommentQuote($fileContents, function($match)
-        {
-            $match = str_replace("+", "U+002B", $match);
-            $match = str_replace("{", "U+007B", $match);
-            $match = str_replace("}", "U+007D", $match);
-            $match = str_replace("(", "U+0028", $match);
-            $match = str_replace(")", "U+0029", $match);
-            $match = str_replace(";", "U+003B", $match);
-            $match = str_replace("$", "U+0024", $match);
-            return $match;
-        });
-
-        // Replace in parentheses
-        $fileContents = replace_enclosed("(", ")", $fileContents, "$", "U+0024");
-
-        // Return
-        return $fileContents;
-    }
-
-    /**
-     * unescape
-     */
-    private static function unescape(string $input) : string
-    {
-        $input = str_replace("U+007B", "{", $input);
-        $input = str_replace("U+007D", "}", $input);
-        $input = str_replace("U+0028", "(", $input);
-        $input = str_replace("U+0029", ")", $input);
-        $input = str_replace("U+003B", ";", $input);
-        $input = str_replace("U+0024", "$", $input);
-        $input = str_replace("U+002B", "+", $input);
-        return $input;
-    }
-
-    /**
-     * getExtra
-     */
-    private static function getExtra(string $fileContents) : string
-    {
-        if(preg_match("/(.*?{{[0]}})(.*)/s", $fileContents, $matches) == 1)
-            return $matches[2];
-        else
-            return "";
-    }
-
-    /**
-     * extractUses
-     */
-    private static function extractUses(string $fileContent) : array
-    {
-        // Match all
-        preg_match_all("/[\t ]*use[\s]+([a-zA-Z0-9\_\\\]+)/", $fileContent, $matches);
-
-        // Return
-        return $matches[1];
-    }
-
-    /**
-     * getUsesDefinitions
-     * 
-     * @param string|ReflectionClass className
-     * @param array options - startsWith/endsWidth
-     */
-    public static function getUsesDefinitions($className, array $options = [])
-    {
-        if(is_string($className))
-            $className = new ReflectionClass($className);
-
-        // Extract
-        $fileContents = file_get_contents($className->getFileName());
-
-        // Return
-        $usesDefinitions = self::extractUses($fileContents);
-
-        // Filter starts with
-        if($startsWith = array_option("startsWith", $options))
-        {
-            $usesDefinitions = array_filter($usesDefinitions, function($v) use ($startsWith)
-            {
-                return str_starts_with($v, $startsWith);
-            });
-        }
-
-        // Filter ends with
-        if($endsWith = array_option("endsWith", $options))
-        {
-            $usesDefinitions = array_filter($usesDefinitions, function($v) use ($endsWith)
-            {
-                return str_ends_with($v, $endsWith);
-            });
-        }
-
-        //
-        return $usesDefinitions;
-    }
-
-    /**
-     * getClassHead
-     */
-    private static function getClassHead(ReflectionClass $reflectionClass, string $escapedFileContents) : string
-    {
-        // Get head of file
-        $head = implode("\n", array_slice(explode("\n", $escapedFileContents), 0, $reflectionClass->getStartLine() - 1));
-
-        // Unescape
-        $head = self::unescape($head);
+        $content = preg_replace_callback("/{{hash-comment-(\d+)}}/", function($matches) {
+            $index = intval($matches[1]);
+            return $this->hashComments[$index];
+        }, $content);
         
-        // Get doc comment
-        if(($docComment = $reflectionClass->getDocComment()) !== false)
-        {
-            $pos = strrpos($head, $docComment);
+        $content = preg_replace_callback("/{{attribute-(\d+)}}/", function($matches) {
+            $index = intval($matches[1]);
+            return $this->attributes[$index];
+        }, $content);
 
-            // If false; then this is probably due to a mismatch between the file contents that have been read and the reflectionClass instance using a different file that does not contain the docComment
-            if($pos === false)
-                throw new \Exception("Could not locate docComment in class header");
+        $content = preg_replace_callback("/{{quote-(\d+)}}/", function($matches) {
+            $index = intval($matches[1]);
+            return $this->quotes[$index];
+        }, $content);
 
-            // Extract the head
-            $head = substr($head, 0, $pos);
-        }
+        $content = preg_replace_callback("/{{slash-comment-(\d+)}}/", function($matches) {
+            $index = intval($matches[1]);
+            return $this->slashComments[$index];
+        }, $content);
 
-        // Return head
-        return $head;
-    }
+        $content = preg_replace_callback("/{{block-comment-(\d+)}}/", function($matches) {
+            $index = intval($matches[1]);
+            return $this->blockComments[$index];
+        }, $content);
 
-    /**
-     * clearMethodBodies
-     */
-    private static function clearMethodBodies(string $classBody)
-    {
-        $placeholders = placeholder_replace("{", "}", $classBody);
-        
-        // Replace placeholders with newlines
-        $placeholders = array_map(function($content){
-            return str_repeat("\n", substr_count($content, "\n"));
-        }, $placeholders);
+        $content = placeholder_restore($content, $this->methodBodies);
 
-        // Return restored
-        return placeholder_restore($classBody, $placeholders);
-    }
-
-    /**
-     * parseComments
-     */
-    private static function parseComments(ClassObject $classObject) : array
-    {
-        // Get class body
-        $classBody = $classObject->body;
-
-        // Comments
-        $comments = [];
-
-        // Clear function bodies
-        $classBody = self::clearMethodBodies($classBody);
-
-        // Match all comments
-        preg_match_all("/^[\t ]+(?:\/\/.*|#[^\[].*|\/\*.*\*\/.*)$/m", $classBody, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
-
-        // Iterate over comments
-        foreach($matches as $details)
-        {
-            $match = $details[0][0];
-            $offset = intval($details[0][1]);
-            $line = substr_count(substr($classBody, 0, $offset), "\n") + 1 + $classObject->getStartLine();
-            $comments[$line] = self::unescape($match);
-        }
-
-        // Return result
-        return $comments;
-    }
-
-    /**
-     * createClassObject
-     */
-    private static function createClassObject(ReflectionClass $reflectionClass, string $filePath, string $escapedFileContents, string $fileContentsNoComments)
-    {
-        // Placeholder replace
-        $placeholders = placeholder_replace("{", "}", $escapedFileContents);
-
-        // Check if at minimum one placeholder is set containing class body
-        if(count($placeholders) === 0)
-            throw new \Exception(sprintf("Could not parse class body for class '%s' using file '%s'", $reflectionClass->getName(), $reflectionClass->getFileName()));
-
-        // Create class object
-        $classObject = new ClassObject($reflectionClass->getName(), $filePath);
-        $classObject->body = $placeholders[0];
-        $classObject->extra = self::unescape(placeholder_restore(self::getExtra($escapedFileContents), $placeholders));
-        $classObject->uses = self::extractUses($fileContentsNoComments);
-        $classObject->head = self::getClassHead($reflectionClass, $escapedFileContents);
-        $classObject->comments = self::parseComments($classObject);
-
-        // Return
-        return $classObject;
-    }
-
-    /**
-     * extractConstructorFromContent
-     */
-    private static function extractConstructorFromContent(string $content)
-    {
-        if(\str_contains($content, "(") && \str_contains($content, ")"))
-            return self::unescape(placeholder_replace("(", ")", $content)[0]);
-
-        return null;
-    }
-
-    /**
-     * extractBody
-     */
-    private static function extractBody(string $body) : string
-    {
-        // Remove leading and trailing newlines
-        $body = preg_replace("/^\n/", "", $body);
-        $body = preg_replace("/[\s]*$/", "", $body);
-
-        // Remove spacing in empty lines
-        $body = preg_replace("/^[\s]+$/m", "", $body);
-
-        // Return body
-        return self::unescape($body);
-    }
-
-    /**
-     * setComponentReturnType
-     */
-    private static function setComponentReturnType(ClassComponent $classComponent, string $content) : ClassComponent
-    {
-        if(preg_match("/\).+:\s*([\s\w\_\\\|]+)/s", $content, $matches) === 1)
-        {
-            $classComponent->returnType = trim($matches[1]);
-        }
-        
-        return $classComponent;
-    }
-
-    /**
-     * getTrailingNewlines
-     */
-    private static function getTrailingNewlines(string $classText, string $match) : string
-    {
-        // Get match position
-        $pos = strpos($classText, $match);
-
-        // Create sub string
-        $sub = substr($classText, $pos + strlen($match));
-
-        // Fetch space
-        if(preg_match("/[\s]*/", $sub, $matches) === 1)
-        {
-            $spacing = $matches[0];
-            $explode = explode("\n", $spacing);
-            $newLines = implode("\n", array_slice($explode, 0, count($explode) - 1));
-            
-            return $newLines;
-        }
-
-        // Cannot be reached, regexp matches always
-        return "";
-    }
-
-    /**
-     * parseMethods
-     */
-    private static function parseMethods(ClassObject $classObject, string $classBody, array $placeholders, string $fileContents, string $escapedFileContents, string $fileContentsNoComments) : ClassObject
-    {
-        // Match all functions
-        preg_match_all("/((?:[\t ]*#\[[^\\n]+\]\\n)*)?([\t ]*)(public|private|protected)?[\s]*(static)?[\s]*function[\s]+(\w+)(\(.*?){{([0-9]+)}}/si", $classBody, $matches);
-
-        // Iterate over functions
-        foreach($matches[0] as $i => $match)
-        {
-            // Extract groups
-            $match =            self::unescape(\placeholder_restore($match, $placeholders));
-            $attributes =       self::unescape($matches[1][$i]);
-            $indentation =      $matches[2][$i];
-            $type =             $matches[3][$i];
-            $static =           $matches[4][$i];
-            $functionName =     $matches[5][$i];
-            $content =          $matches[6][$i];
-            $placeholderIndex = (int) $matches[7][$i];
-            
-            // Get value
-            $value = self::extractConstructorFromContent($content);
-
-            // Get function body
-            $functionBody = self::extractBody($placeholders[$placeholderIndex]);
-
-            // Create function
-            $classMethod = new ClassMethod($classObject->getName(), $functionName);
-            $classMethod->text = $match;
-
-            // Create ClassComponent
-            $classComponent = new ClassComponent(ClassComponent::NEW_METHOD, $functionName, $value);
-            $classComponent = self::setComponentReturnType($classComponent, $content);
-            $classComponent->docComment = ($docComment = $classMethod->getDocComment()) == false ? "" : $docComment;
-            $classComponent->attributes = $attributes;
-            $classComponent->body = $functionBody;
-            $classComponent->text = $match;
-            $classComponent->isPublic = $classMethod->isPublic();
-            $classComponent->isPrivate = $classMethod->isPrivate();
-            $classComponent->isProtected = $classMethod->isProtected();
-            $classComponent->isStatic = $classMethod->isStatic();
-            $classComponent->isFinal = $classMethod->isFinal();
-            $classComponent->curlyBracketOnNewline = self::curlyBracketOnNewline($classMethod->getStartLine(), $escapedFileContents);
-            $classComponent->indentation = $indentation;
-
-            //Get trailing newlines
-            $trailingNewLines = self::getTrailingNewlines($fileContents, $match);
-
-            // Set trailing line breals
-            $classComponent->trailingLineBreaks = substr_count($trailingNewLines, "\n") + 1;
-
-            // Set text
-            $classMethod->text .= $trailingNewLines;
-
-            // Set classComponent
-            $classMethod->component = $classComponent;
-            
-            // Add function
-            $classObject->methods[$functionName] = $classMethod;
-            $classObject->component->addComponent($classComponent);
-         }
- 
-         // Return object
-         return $classObject;
-    }
-
-    /**
-     * getLineInText
-     *  Get line information for properties/constants
-     */
-    private static function getLineInText(string $text, string $search) : int
-    {
-        // Remove spacing from search query
-        $search = trim($search);
-
-        // Search in text
-        $searchPos = strpos($text, $search);
-
-        // Check if search was found
-        if($searchPos === false){
-            throw new \Exception(sprintf("Could not find '%s' in class body text", $search));
-        }
-
-        // Set result text
-        $result = substr($text, 0, $searchPos);
-
-        // Create lines
-        $lines = explode("\n", $result);
-
-        // Return count
-        return count($lines);
-    }
-
-    /**
-     * parseConstants
-     */
-    private static function parseConstants(ClassObject $classObject, string $classBody, array $placeholders, string $fileContents, string $escapedFileContents, string $fileContentsNoComments) : ClassObject
-    {
-        // Match all functions
-        preg_match_all("/\n?([\t ]*)const[\s]+([a-zA-Z0-9\_]+)(?:[\s]*=([\s]*(?:.*?)));(.*?)(?=\n)/si", $classBody, $matches);
-
-        // Iterate over functions
-        foreach($matches[0] as $i => $match)
-        {
-            // Extract groups
-            $match =            self::unescape(placeholder_restore($match, $placeholders));
-            $indentation =      $matches[1][$i];
-            $variableName =     $matches[2][$i];
-            $value =            strlen($value = self::unescape(placeholder_restore($matches[3][$i], $placeholders))) === 0 ? null : $value;
-            $inlineComment =    self::unescape(placeholder_restore($matches[4][$i], $placeholders));
-
-            // Create constant
-            $classConstant = new ClassConstant($classObject->getName(), $variableName);
-            $classConstant->setLine(self::getLineInText($fileContents, $match));
-            $classConstant->text = $match;
-
-            // Create class component constant
-            $classComponent = new ClassComponent(ClassComponent::NEW_CONSTANT, $variableName, $value);
-            $classComponent->indentation = $indentation;
-            $classComponent->docComment = ($docComment = $classConstant->getDocComment()) == false ? "" : $docComment;
-            $classComponent->inlineComment = $inlineComment;
-
-            // Get trailing newlines
-            $trailingNewLines = self::getTrailingNewlines($fileContents, $match);
-
-            // Set trailing line breals
-            $classComponent->trailingLineBreaks = substr_count($trailingNewLines, "\n") + 1;
-
-            // Update text
-            $classConstant->text .=  $trailingNewLines;
-
-            // Set classComponent
-            $classConstant->component = $classComponent;
-
-            // Add constant
-            $classObject->constants[$variableName] = $classConstant;
-            $classObject->component->addComponent($classComponent);
-        }
-
-        // Return
-        return $classObject;
-    }
-
-    /**
-     * parseProperties
-     */
-    private static function parseProperties(ClassObject $classObject, string $classBody, array $placeholders, string $fileContents, string $escapedFileContents, string $fileContentsNoComments) : ClassObject
-    {
-        // Match all functions
-        preg_match_all("/((?:[\t ]*#\[[^\\n]+\]\\n)*)?([\t ]*)(public|private|protected)?[\s]*(static)?[\s]*\\$([a-zA-Z0-9\_]+)(?:[\s]*=([\s]*(?:.*?)))?;(.*?)(?=\n)/si", $classBody, $matches);
-
-        // Iterate over functions
-        foreach($matches[0] as $i => $match)
-        {
-            // Extract groups
-            $match =                self::unescape(placeholder_restore($match, $placeholders));
-            $attributes =           self::unescape($matches[1][$i]);
-            $indentation =          $matches[2][$i];
-            $type =                 $matches[3][$i];
-            $static =               $matches[4][$i];
-            $variableName =         $matches[5][$i];
-            $value =                strlen($value = self::unescape(placeholder_restore($matches[6][$i], $placeholders))) === 0 ? null : $value;
-            $inlineComment =        self::unescape(placeholder_restore($matches[7][$i], $placeholders));
-
-            // Create constant
-            $classProperty = new ClassProperty($classObject->getName(), $variableName);
-            $classProperty->setLine(self::getLineInText($fileContents, $match));
-            $classProperty->text = $match;
-
-            // Create classComponent
-            $classComponent = new ClassComponent(ClassComponent::NEW_PROPERTY, $variableName, $value);
-            $classComponent->isPublic = $classProperty->isPublic();
-            $classComponent->isPrivate = $classProperty->isPrivate();
-            $classComponent->isProtected = $classProperty->isProtected();
-            $classComponent->isStatic = $classProperty->isStatic();
-            $classComponent->indentation = $indentation;
-            $classComponent->docComment = ($docComment = $classProperty->getDocComment()) == false ? "" : $docComment;
-            $classComponent->attributes = $attributes;
-            $classComponent->inlineComment = $inlineComment;
-
-            // Get trailing newlines
-            $trailingNewLines = self::getTrailingNewlines($fileContents, $match);
-
-            // Set trailing line breaks
-            $classComponent->trailingLineBreaks = substr_count($trailingNewLines, "\n") + 1;
-
-            // Update text
-            $classProperty->text .=  $trailingNewLines;
-
-            // Set classComponent
-            $classProperty->component = $classComponent;
-
-            // Add constant
-            $classObject->properties[$variableName] = $classProperty;
-            $classObject->component->addComponent($classComponent);
-        }
-
-        // Return
-        return $classObject;
+        return $content;
     }
 
     /**
      * parseClassBody
+     * 
+     *  Turns the class body into definition fragments per php syntax.
+     * 
+     *  For example when two properties A and B are defined, and B has an attribute and block comment, these belong to property B because php parsing is top down.
+     *  Everything that is defined before property B until you reach property A definition, belongs to B.
+     * 
+     *  We therefore capture every "definition" through a series of capturing steps, turning code into placeholders for easier parsing.
+     *  
+     *  When the definitions are known, it becomes easy to parse the definitions individually and turn them into the appropriate objects.
      */
-    private static function parseClassBody(ClassObject $classObject, string $fileContents, string $escapedFileContents, string $fileContentsNoComments) : ClassObject
+    public function parseClassBody(string $classBody)
     {
-        // Set classBody
-        $classBody = $classObject->body;
+        // Put methods in placeholders
+        $this->methodBodies = placeholder_replace("{", "}", $classBody);
 
-        // Get placeholders
-        $placeholders = placeholder_replace("{", "}", $classBody);
+        // Capture Block Comments
+        $this->blockComments = [];
+        $classBody = preg_replace_callback("/\/\*.+?(?=\*\/\n)\*\/\n/s", function($matches)
+        {
+            $matchString = $matches[0][0];
+            $this->blockComments[] = $matchString;
+            return "{{block-comment-".(count($this->blockComments)-1)."}}";
+        }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
 
-        // Parse methods
-        $classObject = self::parseMethods($classObject, $classBody, $placeholders, $fileContents, $escapedFileContents, $fileContentsNoComments);
+        // Replace slash comments with placeholders for later recovery
+        $this->slashComments = [];
+        $classBody = preg_replace_callback("/\/\/(?!.+;\s*\/\/).+/", function($matches)
+        {
+            $matchString = $matches[0][0];
+            $offset = $matches[0][1];
+            $this->slashComments[] = $matchString;
+            return "{{slash-comment-".(count($this->slashComments)-1)."}}";
+        }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
 
-        // Parse constants
-        $classObject = self::parseConstants($classObject, $classBody, $placeholders, $fileContents, $escapedFileContents, $fileContentsNoComments);
+        // Replace quoted strings for later recovery
+        $this->quotes = [];
+        $classBody = preg_replace_callback("/(['\"`])(.+?)(?<!\\\\)\\1/s", function($matches)
+        {
+            $matchString = $matches[0][0];
+            $offset = $matches[0][1];
+            $this->quotes[] = $matchString;
+            return "{{quote-".(count($this->quotes)-1)."}}";
+        }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
 
-        // Parse properties
-        $classObject = self::parseProperties($classObject, $classBody, $placeholders, $fileContents, $escapedFileContents, $fileContentsNoComments);
+        // Replace quoted strings for later recovery
+        $this->attributes = [];
+        $classBody = preg_replace_callback("/#\[[\w]\w+\(.+?(?=\]\s)\]/s", function($matches)
+        {
+            $matchString = $matches[0][0];
+            $offset = $matches[0][1];
+            $this->attributes[] = $matchString;
+            return "{{attribute-".(count($this->attributes)-1)."}}";
+        }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
 
-        // Return classObject
-        return $classObject;
+        // Replace hash comments strings for later recovery
+        $this->hashComments = [];
+        $classBody = preg_replace_callback("/#.+$/m", function($matches)
+        {
+            $matchString = $matches[0][0];
+            $offset = $matches[0][1];
+            $this->hashComments[] = $matchString;
+            return "{{hash-comment-".(count($this->hashComments)-1)."}}";
+        }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
+
+        // Les do dis
+        $this->parentheses = [];
+        $classBody = replace_enclosed_function("(", ")", $classBody, function($value)
+        {
+            $this->parentheses[] = $value;
+            return "{{parentheses-".(count($this->parentheses)-1)."}}";
+        });
+
+        return $classBody;
+    }
+
+    /**
+     * parseTrait
+     */
+    private function parseTrait(ClassObject $classObject, array $matchResult, array $matchData, string $definition, int $definitionIndex) : ClassTrait
+    {
+        $trait = new ClassTrait($classObject->getName(), $matchData["name"]);
+        $trait->definition = $definition;
+        $trait->definitionIndex = $definitionIndex;
+
+        if(preg_match("/use\s+(.+)/s", $definition, $matches, PREG_OFFSET_CAPTURE))
+        {
+            $offset = $matches[0][1];
+            $trait->header = substr($definition, 0, $offset);
+        }
+
+        return $trait;
+    }
+
+    /**
+     * parseConstant
+     */
+    private function parseConstant(ClassObject $classObject, array $matchResult, array $matchData, string $definition, int $definitionIndex) : ClassConstant
+    {
+        $constant = new ClassConstant($classObject->getName(), $matchData["name"]);
+        $constant->definition = $definition;
+        $constant->definitionIndex = $definitionIndex;
+        
+        if(preg_match("/const\s+(.+)/", $definition, $matches, PREG_OFFSET_CAPTURE))
+        {
+            $offset = $matches[0][1];
+            $constant->header = substr($definition, 0, $offset);
+        }
+
+        return $constant;
+    }
+
+    /**
+     * parseProperty
+     */
+    private function parseProperty(ClassObject $classObject, array $matchResult, array $matchData, string $definition, int $definitionIndex) : ClassProperty
+    {
+        $property = new ClassProperty($classObject->getName(), $matchData["name"]);
+        $property->definition = $definition;
+        $property->definitionIndex = $definitionIndex;
+        $property->type = $matchData["type"];
+        $property->static = $matchData["static"];
+        $property->value = $matchData["value"];
+        
+        if(preg_match("/const\s+(.+)/", $definition, $matches, PREG_OFFSET_CAPTURE))
+        {
+            $offset = $matches[0][1];
+            $property->header = substr($definition, 0, $offset);
+        }
+
+        return $property;
+    }
+
+    /**
+     * parseMethod
+     */
+    private function parseMethod(ClassObject $classObject, array $matchResult, array $matchData, string $definition, int $definitionIndex) : ClassMethod
+    {
+        $method = new ClassMethod($classObject->getName(), $matchData["name"]);
+        $method->definition = $definition;
+        $method->definitionIndex = $definitionIndex;
+        $method->type = $matchData["type"];
+        $method->static = $matchData["static"];
+        $method->args = $matchData["args"];
+        $method->returnType = $matchData["returnType"];
+        
+        if(preg_match("/const\s+(.+)/", $definition, $matches, PREG_OFFSET_CAPTURE))
+        {
+            $offset = $matches[0][1];
+            $method->header = substr($definition, 0, $offset);
+        }
+
+        return $method;
+    }
+
+    /**
+     * parseClassDefinition
+     */
+    private function parseClassDefinition(ClassObject $classObject, string $matchType, array $matchResult, array $matchData, string $definition, int $definitionIndex)
+    {
+        switch($matchType)
+        {
+            case "trait":
+                $classObject->traits[$definitionIndex] = $this->parseTrait($classObject, $matchResult, $matchData, $definition, $definitionIndex);
+            break;
+            case "constant":
+                $classObject->constants[$definitionIndex] = $this->parseConstant($classObject, $matchResult, $matchData, $definition, $definitionIndex);
+            break;
+            case "property":
+                $classObject->properties[$definitionIndex] = $this->parseProperty($classObject, $matchResult, $matchData, $definition, $definitionIndex);
+            break;
+            case "method":
+                $classObject->methods[$definitionIndex] = $this->parseMethod($classObject, $matchResult, $matchData, $definition, $definitionIndex);
+            break;
+            default:
+                throw new LogicException("Could not parse match type '$matchType', type unknown");
+        }
+    }
+
+    /**
+     * createDefinitions
+     */
+    private function createDefinitions(ClassObject $classObject)
+    {
+        $parsedClassBody = $this->parseClassBody($classObject->body);
+        
+        // Declaration
+        $definitions = [];
+        $maxIterations = 999;
+        $iterations = 0;
+        while(strlen($parsedClassBody) > 0 && $iterations < $maxIterations)
+        {
+            $offset = 0;
+            $matchOffset = null;
+            $matchString = null;
+            $matchResult = null;
+            $matchType = null;
+            $matchName = null;
+            $matchData = []; // Specific data from match 
+
+            // Class Traits
+            if(preg_match("/\s+use\s+(.+?(?=;));\n/si", $parsedClassBody, $matches, PREG_OFFSET_CAPTURE))
+            {
+                $offset = $matches[0][1];
+
+                if($matchOffset === null || $offset < $matchOffset)
+                {
+                    $matchString = $matches[0][0];
+                    $matchOffset = $offset;
+                    $matchResult = $matches;
+                    $matchType = "trait";
+                    $matchName = $matches[1][0];
+                    $matchData["name"] = $matchName;
+                }
+            }
+
+            // Class Constants
+            if(preg_match("/\s+const\s+([\w]+)\s*=\s*(.+?(?=;));(.+?(?=\n))\n/si", $parsedClassBody, $matches, PREG_OFFSET_CAPTURE))
+            {
+                $offset = $matches[0][1];
+
+                if($matchOffset === null || $offset < $matchOffset)
+                {
+                    $matchString = $matches[0][0];
+                    $matchOffset = $offset;
+                    $matchResult = $matches;
+                    $matchType = "constant";
+                    $matchName = $matches[1][0];
+                    $matchData["name"] = $matchName;
+                }
+            }
+
+            // Class Properties
+            if(preg_match("/\s+(protected|public|private)?(?:\s+(static))?\s+\\$(\w+)(?:\s*;|\s*=(?:\s*(.+?(?=;));))?(.+?(?=\n))\n/si", $parsedClassBody, $matches, PREG_OFFSET_CAPTURE))
+            {
+                $offset = $matches[0][1];
+
+                if($matchOffset === null || $offset < $matchOffset)
+                {
+                    $matchString = $matches[0][0];
+                    $matchOffset = $offset;
+                    $matchResult = $matches;
+                    $matchType = "property";
+                    $matchName = $matches[3][0];
+                    $matchData["type"] = $matches[1][0];
+                    $matchData["static"] = $matches[2][0];
+                    $matchData["name"] = $matches[3][0];
+                    $matchData["value"] = $matches[4][0];
+                }
+            }
+
+            // Class Methods
+            if(preg_match("/\s+(protected|public|private)(?:\s+(static))?\s+function\s+(\w+)\((.+?)\)(?:\s*:\s*(\w+))?.+?{{\d+}}\n/si", $parsedClassBody, $matches, PREG_OFFSET_CAPTURE))
+            {
+                $offset = $matches[0][1];
+
+                if($matchOffset === null || $offset < $matchOffset)
+                {
+                    $matchString = $matches[0][0];
+                    $matchOffset = $offset;
+                    $matchResult = $matches;
+                    $matchType = "method";
+                    $matchName = $matches[3][0];
+                    $matchData["type"] = $matches[1][0];
+                    $matchData["static"] = $matches[2][0];
+                    $matchData["name"] = $matches[3][0];
+                    $matchData["args"] = $this->reverseContent($matches[4][0]);
+                    $matchData["returnType"] = @$matches[5][0] ?? "";
+                }
+            }
+
+            if($matchResult == null)
+            {
+                break;
+            }
+            else
+            {
+                log_info("Found $matchType: $matchName");
+            }
+
+            // Remove it from the parsedClassBody
+            $fullPropertyDefinition = substr($parsedClassBody, 0, strlen($matchString) + $matchOffset);
+            $parsedClassBody = substr($parsedClassBody, strlen($fullPropertyDefinition));
+
+            // Get full declaration
+            $definitionIndex = count($definitions);
+            $definitions[] = $definition = $this->reverseContent($fullPropertyDefinition);
+
+            // Parse definition
+            $this->parseClassDefinition($classObject, $matchType, $matchResult, $matchData, $definition, $definitionIndex);
+
+            // Safety check
+            $iterations++;
+        }
+        
+        return $definitions;
+    }
+
+    /**
+     * readFile
+     */
+    private function readFile(string $filePath)
+    {
+        // Get file contents
+        $fileContent = file_get_contents($filePath);
+
+        // Create placeholders for classess
+        $classBodies = placeholder_replace("{", "}", $fileContent);
+
+        // Find class definition lines
+        preg_match_all("/(\s*(final|abstract)?\s*class\s+(\w+)(?:\s+extends\s+([\w\\\\]+))?(?:\s+implements\s+(\w+))?)(.+?(?=\{)\{)\{\d+\}(\})/s", $fileContent, $matches, PREG_OFFSET_CAPTURE);
+
+        // Parsing vars
+        $fileHeader = null; // The header is everything that leads up to the class definition or signature
+        $startOffset = 0;
+
+        // Result stored in classObjects
+        $classObjects = [];
+
+        if(count($matches))
+        {
+            foreach($matches[0] as $i => $classMatch)
+            {
+                // Extract params
+                $matchString = $classMatch[0];
+                $signature = $matches[1][$i][0];
+                $final = $matches[2][$i][0];
+                $className = $matches[3][$i][0];
+                $extends = $matches[4][$i][0];
+                $implements = $matches[5][$i][0];
+                $openParentheses = $matches[6][$i][0];
+                $closeParentheses = $matches[7][$i][0];
+
+                // Get offset
+                $offset = intval($classMatch[1]);
+                $header = substr($fileContent, $startOffset, $offset);
+                $startOffset = strlen($header) + strlen($matchString);
+
+                // Set header
+                if($fileHeader == null)
+                    $fileHeader = $header;
+
+                // Extract namespac
+                if(preg_match("/namespace\s+(\w+);/", $fileHeader, $namespaceMatches)) // Use fileHeader so if multiple classes are in one file, both will receive the same props
+                {
+                    $namespace = $namespaceMatches[1];
+                }
+                else
+                {
+                    $namespace = "";
+                }
+
+                // Extract uses
+                preg_match_all("/use\s+(.+?);/m", $fileHeader, $usesMatches); // Use fileHeader so if multiple classes are in one file, both will receive the same props
+                $uses = [];
+                if(is_array($usesMatches[1]))
+                {
+                    foreach($usesMatches[1] as $usesMatch)
+                    {
+                        $uses[] = $usesMatch;
+                    }
+                }
+
+                // Create classObject
+                $className = strlen($namespace) > 0 ? "$namespace\\" . $className : $className;
+
+                log_info("Parsed Class: $className");
+
+                // Create object
+                $classObject = new ClassObject($className);
+                $classObject->uses = $uses;
+                $classObject->extends = $extends; // As literal text from file (not resolved class)
+                $classObject->implements = $implements; // As literal text from file (not resolved class)
+                $classObject->header = $header;
+                $classObject->signature = $signature;
+                $classObject->openParentheses = $openParentheses;
+                $classObject->closeParentheses = $closeParentheses;
+                $classObject->definitionIndex = count($classObjects);
+
+                // Use setBody to obtain hash
+                $classObject->setBody(self::getClassBody($matchString, $classBodies));
+
+                // Add object
+                $classObjects[] = $classObject;
+            }
+        }
+
+        return $classObjects;
+    }
+
+    /**
+     * parseFile
+     * 
+     * @return ClassObject[]
+     */
+    public function parseFile(string $filePath) : array
+    {
+        log_info("Reading: $filePath");
+
+        // Read file contents
+        $classObjects = $this->readFile($filePath);
+        
+        // Parse the bodies
+        foreach($classObjects as $classObject)
+        {
+            log_info("Reading: $filePath");
+
+            // Create syntax definitions
+            $classObject->definitions = $this->createDefinitions($classObject);
+
+            // Reset parser vars
+            $this->initVars();
+        }
+
+        // Return object
+        return $classObjects;
     }
 
     /**
      * parse
      */
-    public static function parse(string $filePath) : ClassObject
+    public static function parse(string $filePath, array $opts = []) : array
     {
-        // Get className
-        self::getClassName($filePath, $reflectionClass);
-
-        // Get file contents
-        $fileContent = file_get_contents($filePath);
-
-        // Create file contents without comments
-        $fileContentNoComments = TextParser::removeComments($fileContent);
-
-        // Create classComponent
-        $classComponent = self::createClassComponent($reflectionClass, $fileContentNoComments);
-
-        // Create escaped fileContents
-        $escapedFileContents = self::escape($fileContent);
-        
-        // Create classObject
-        $classObject = self::createClassObject($reflectionClass, $filePath, $escapedFileContents, $fileContentNoComments);
-
-        // Set component
-        $classObject->component = $classComponent;
-
-        // Parse class body
-        $classObject = self::parseClassBody($classObject, $fileContent, $escapedFileContents, $fileContentNoComments);
-
-        // Unescape classBody
-        $classObject->body = self::unescape($classObject->body);
-
-        // Return result
-        return $classObject;
-    }
-
-    /**
-     * getMethodAtLine
-     */
-    public static function getMethodAtLine(string $filePath, int $line) : ReflectionMethod
-    {
-        // Get reflection class
-        $reflectionClass = self::getReflectionClass($filePath);
-
-        // Get methods between line
-        $methods = array_filter($reflectionClass->getMethods(), function($method) use ($line) {
-            return $line >= $method->getStartLine() && $line <= $method->getEndLine();
-        });
-
-        // Check result
-        if(count($methods) === 0)
-            throw new \Exception(sprintf("Could not get method at line '%d' in file '%s'", $line, $filePath));
-
-        // Return
-        return reset($methods);
-    }
-
-    /**
-     * getBody
-     */
-    public static function getBody($reflection) : string
-    {
-        // Check input
-        if(!$reflection instanceof ReflectionClass && !$reflection instanceof ReflectionMethod && !$reflection instanceof ReflectionFunction)
-            throw new \InvalidArgumentException(sprintf("Invalid argument type for argument 'reflection' using type '%s'", ($type = gettype($reflection)) === "object" ? get_class($reflection) : $type));;
-        
-        // Get body 
-        $fileContents = file_get_contents($reflection->getFileName());
-        
-        // Get function body
-        $body = implode("\n", array_slice(explode("\n", $fileContents), $reflection->getStartLine(), $reflection->getEndLine() - $reflection->getStartLine()));
-
-        // Return body
-        return $body;
+        return (new self($opts))->parseFile($filePath);
     }
 }

@@ -3,55 +3,32 @@ declare(strict_types=1);
 
 namespace gijsbos\ClassParser\Classes;
 
+use ReflectionMethod;
+
 /**
  * ClassMethod
  */
-class ClassMethod extends \ReflectionMethod
+class ClassMethod extends ReflectionMethod
 {
-    /**
-     * @var string $text
-     */
-    public $text;
-
-    /**
-     * @var null|ClassComponent $component;
-     */
-    public $component;
+    public string $header = "";
+    public string $type = "";
+    public string $static = "";
+    public string $name = "";
+    public string $args = "";
+    public string $returnType = "";
+    public string $definition = "";
+    public null|int $definitionIndex = null;
 
     /**
      * __construct
      */
-    public function __construct($object, string $method)
+    public function __construct($objectOrMethod, $method)
     {
-        // Parent constructor
-        parent::__construct($object, $method);
-
-        // Init props
-        $this->text = "";
-        $this->component = null;
-    }
-    
-    /**
-     * equals
-     */
-    public function equals(ClassMethod $classMethod) : bool
-    {
-        return \hash_equals(hash("sha256", $this->text), hash("sha256", $classMethod->text));
+        parent::__construct($objectOrMethod, $method);
     }
 
-    /**
-     * @return ClassComponent
-     */
-    public function getComponent()
+    public function toString()
     {
-        return $this->component;
+        return $this->definition;
     }
-
-    /**
-     * toString
-     */
-    public function toString() : string
-    {
-        return $this->component ? $this->component->toString() : "";
-    } 
 }

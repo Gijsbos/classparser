@@ -3,10 +3,7 @@ declare(strict_types=1);
 
 namespace Test;
 
-/**
- * TestClassEmpty
- */
-final class TestClassEmpty
+trait TestTrait
 {
     
 }

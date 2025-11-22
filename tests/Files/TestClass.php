@@ -1,17 +1,25 @@
 <?php
 declare(strict_types=1);
 
-use gijsbos\ClassParser\Classes\ClassMethod;
+namespace Test;
+
+use gijsbos\ClassParser\Classes\ClassObject;
+
+include_once "./tests/Files/TestTrait.php";
 
 /**
  * TestClass
  */
-final class TestClass extends ClassMethod
+#[TestAttribute()]
+final class TestClass extends ClassObject
 {
+    use TestTrait;
+
     const CONSTANT =    "value;name{ // }{ value }"; // Try to break the algorithm on " ';' and empty '{}' and non empty '{ value }'
     const CONSTANT_2 = "a-definition-to-test-for-trailing-newlines";
 
-    public static $value;
+    public static 
+        $value;
 
     /**
      * variable1
@@ -81,6 +89,9 @@ final class TestClass extends ClassMethod
 
     #alt
     //comment
+    #[TestAttribute([
+        "multilineattribute"
+    ])]
     protected function testAltComment()
     {
         // Function comment
@@ -95,3 +106,10 @@ final class TestClass extends ClassMethod
 }
 
 // Extra
+
+/**
+ * TestClass
+ */
+final class TestClass2 extends ClassObject
+{
+}

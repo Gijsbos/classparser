@@ -3,53 +3,28 @@ declare(strict_types=1);
 
 namespace gijsbos\ClassParser\Classes;
 
+use ReflectionProperty;
+
 /**
  * ClassProperty
  */
-class ClassProperty extends \ReflectionProperty
+class ClassProperty extends ReflectionProperty
 {
-    private $line;
-    public $text;
-    public $component;
-    
-    /**
-     * __construct
-     */
-    public function __construct($object, string $property)
-    {
-        // Parent constructor
-        parent::__construct($object, $property);
+    public string $header = "";
+    public string $type = "";
+    public string $static = "";
+    public string $name = "";
+    public string $value = "";
+    public string $definition = "";
+    public null|int $definitionIndex = null;
 
-        // Init props
-        $this->line = 0;
-        $this->text = "";
-        $this->component = null;
+    public function __construct($class, $property)
+    {
+        parent::__construct($class, $property);   
     }
 
-    /**
-     * setLine
-     */
-    public function setLine(int $line) : void
+    public function toString()
     {
-        $this->line = $line;
+        return $this->definition;
     }
-
-    /**
-     * getStartLine
-     */
-    public function getStartLine() : int
-    {
-        return $this->line;
-    }
-
-    /**
-     * toString
-     */
-    public function toString() : string
-    {
-        if($this->component !== null)
-            return $this->component->toString();
-
-        return "";
-    } 
 }

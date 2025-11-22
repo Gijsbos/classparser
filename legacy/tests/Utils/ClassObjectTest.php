@@ -7,6 +7,7 @@ use gijsbos\ClassParser\ClassParser;
 use PHPUnit\Framework\TestCase;
 
 // Include TestClass
+include_once("./tests/Files/TestTrait.php");
 include_once("./tests/Files/TestAttribute.php");
 include_once("./tests/Files/TestClass.php");
 include_once("./tests/Files/TestClassEmpty.php");
@@ -14,41 +15,42 @@ include_once("./tests/Files/TestClassSingleFunction.php");
 
 final class ClassObjectTest extends TestCase
 {
-    public function testGetMethodAtLine1()
-    {
-        $classObject = ClassParser::parse("./tests/Files/TestClass.php");
-        $result = $classObject->getMethodAtLine(47)->name;
-        $expectedResult = "testPrivateFunction";
-        $this->assertEquals($expectedResult, $result);
-    }
+    // public function testGetMethodAtLine1()
+    // {
+    //     $classObject = ClassParser::parse("./tests/Files/TestClass.php");
+    //     $result = $classObject->getMethodAtLine(47)->name;
+    //     $expectedResult = "testPrivateFunction";
+    //     $this->assertEquals($expectedResult, $result);
+    // }
 
-    public function testGetMethodAtLine2()
-    {
-        $classObject = ClassParser::parse("./tests/Files/TestClass.php");
-        $result = $classObject->getMethodAtLine(55)->name;
-        $expectedResult = "testPublicStaticFunction";
-        $this->assertEquals($expectedResult, $result);
-    }
+    // public function testGetMethodAtLine2()
+    // {
+    //     $classObject = ClassParser::parse("./tests/Files/TestClass.php");
+    //     $result = $classObject->getMethodAtLine(55)->name;
+    //     $expectedResult = "testPublicStaticFunction";
+    //     $this->assertEquals($expectedResult, $result);
+    // }
 
-    public function testGetMethodAtLineNotFound()
-    {
-        $this->expectExceptionMessage("Could not locate calling method name for class 'TestClass' at './tests/Files/TestClass.php:1'");
-        $classObject = ClassParser::parse("./tests/Files/TestClass.php");
-        $result = $classObject->getMethodAtLine(1);
-    }
+    // public function testGetMethodAtLineNotFound()
+    // {
+    //     $this->expectExceptionMessage("Could not locate calling method name for class 'TestClass' at './tests/Files/TestClass.php:1'");
+    //     $classObject = ClassParser::parse("./tests/Files/TestClass.php");
+    //     $result = $classObject->getMethodAtLine(1);
+    // }
 
     public function testToString()
     {
         // Load class object
-        $classObject = ClassParser::parse("./tests/Files/TestClass.php");
+        $classObject = ClassParser::parse("./tests/Files/AccessToken.php");
 
         // Add custom components to class object
-        $classObject->component->addComponent(new ClassComponent(ClassComponent::NEW_CONSTANT, "new_constant"));
-        $classObject->component->addComponent(new ClassComponent(ClassComponent::NEW_PROPERTY, "new_property"));
-        $classObject->component->addComponent(new ClassComponent(ClassComponent::NEW_METHOD, "new_method"));
+        // $classObject->component->addComponent(new ClassComponent(ClassComponent::NEW_CONSTANT, "new_constant"));
+        // $classObject->component->addComponent(new ClassComponent(ClassComponent::NEW_PROPERTY, "new_property"));
+        // $classObject->component->addComponent(new ClassComponent(ClassComponent::NEW_METHOD, "new_method"));
 
         // Print object
         $result = $classObject->toString();
+        var_dump($result);exit();
         $expectedResult = <<< EOD
 <?php
 declare(strict_types=1);

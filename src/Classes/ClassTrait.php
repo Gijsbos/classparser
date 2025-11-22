@@ -3,20 +3,21 @@ declare(strict_types=1);
 
 namespace gijsbos\ClassParser\Classes;
 
-use ReflectionClassConstant;
-
 /**
- * ClassConstant
+ * ClassTrait
  */
-class ClassConstant extends ReflectionClassConstant
+class ClassTrait
 {
     public string $header = "";
+    public string $class = "";
+    public string $name = "";
     public string $definition = "";
     public null|int $definitionIndex = null;
 
-    public function __construct($class, $constant)
+    public function __construct(string $class, string $name)
     {
-        parent::__construct($class, $constant);  
+        $this->class = $class;
+        $this->name = $name;
     }
 
     public function toString()

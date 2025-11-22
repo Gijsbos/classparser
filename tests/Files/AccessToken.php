@@ -1,11 +1,17 @@
 <?php
 declare(strict_types=1);
 
+use Test\TestTrait;
+
+include_once "./tests/Files/TestTrait.php";
+
 /**
  * AccessToken
  */
 class AccessToken
 {
+    use TestTrait;
+
     /**
      * @var string token
      * 

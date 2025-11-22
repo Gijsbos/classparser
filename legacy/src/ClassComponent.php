@@ -12,6 +12,8 @@ class ClassComponent
     const NEW_PROPERTY = 2;
     const NEW_METHOD = 3;
     const NEW_CLASS = 4;
+    const NEW_USE = 5;
+    const NEW_ATTRIBUTE = 6;
 
     /**
      * @var int type
@@ -39,11 +41,6 @@ class ClassComponent
     public $inlineComment; // constant/property definitions
 
     /**
-     * @var string attributes
-     */
-    public $attributes;
-
-    /**
      * @var null|string body
      */
     public $body;
@@ -66,6 +63,8 @@ class ClassComponent
     public $isFinal;
     public $isAbstract;
     public $isInterface;
+    public $uses;
+    public $attributes;
     public $constants;
     public $properties;
     public $methods;
@@ -89,7 +88,6 @@ class ClassComponent
         $this->value = $value;
         $this->docComment = $docComment !== null ? $docComment : "";
         $this->inlineComment = "";
-        $this->attributes = "";
         $this->body = "";
         $this->text = "";
         $this->returnType = "";
@@ -106,10 +104,44 @@ class ClassComponent
         $this->isFinal = false;
         $this->isAbstract = false;
         $this->isInterface = false;
+        $this->uses = [];
+        $this->attributes = [];
         $this->constants = [];
         $this->properties = [];
         $this->methods = [];
         $this->parent = null;
+    }
+
+    /**
+     * hasUse
+     */
+    public function hasUse(string $use) : bool
+    {
+        return array_key_exists($use, $this->uses);
+    }
+
+    /**
+     * getUse
+     */
+    public function getUse(string $use) : bool
+    {
+        return $this->uses[$use];
+    }
+
+    /**
+     * hasAttribute
+     */
+    public function hasAttribute(string $attribute) : bool
+    {
+        return array_key_exists($attribute, $this->attributes);
+    }
+
+    /**
+     * getUse
+     */
+    public function getAttribute(string $attribute) : bool
+    {
+        return $this->attributes[$attribute];
     }
 
     /**
@@ -268,6 +300,26 @@ class ClassComponent
     }
 
     /**
+     * printUse
+     */
+    private function printUse() : string
+    {
+        $docComment = $this->docComment !== "" ? $this->indentation . $this->docComment . "\n" : "";
+        $trailingLineBreaks = \str_repeat("\n", $this->trailingLineBreaks);
+        return sprintf("%s%suse %s;%s%s", $docComment, $this->indentation, $this->name, $this->inlineComment, $trailingLineBreaks);
+    }
+
+    /**
+     * printAttribute
+     */
+    private function printAttribute() : string
+    {
+        $docComment = $this->docComment !== "" ? $this->indentation . $this->docComment . "\n" : "";
+        $trailingLineBreaks = \str_repeat("\n", $this->trailingLineBreaks);
+        return sprintf("%s%suse %s;%s%s", $docComment, $this->indentation, $this->name, $this->inlineComment, $trailingLineBreaks);
+    }
+
+    /**
      * printConstant
      */
     private function printConstant() : string
@@ -290,7 +342,7 @@ class ClassComponent
         $static = $this->isStatic ? "static " : "";
         $value = $this->value === null ? "" : " =" . $this->value;
         $trailingLineBreaks = \str_repeat("\n", $this->trailingLineBreaks);
-        return sprintf("%s%s%s%s%s\$%s%s;%s%s", $docComment, $this->attributes, $this->indentation, $visibility, $static, $this->name, $value, $this->inlineComment, $trailingLineBreaks);
+        return sprintf("%s%s%s%s\$%s%s;%s%s", $docComment, $this->indentation, $visibility, $static, $this->name, $value, $this->inlineComment, $trailingLineBreaks);
     }
 
     /**
@@ -314,7 +366,7 @@ class ClassComponent
         $body = $curlyBracketOnNewline . $body . sprintf("\n%s}%s", $this->indentation, \str_repeat("\n", $this->trailingLineBreaks));
 
         // Return result
-        return sprintf("%s%s%s%s%sfunction %s%s%s%s", $docComment, $this->attributes, $this->indentation, $visibility, $static, $this->name, $value, $returnType, $body);
+        return sprintf("%s%s%s%sfunction %s%s%s%s", $docComment, $this->indentation, $visibility, $static, $this->name, $value, $returnType, $body);
     }
 
     /**
@@ -333,6 +385,12 @@ class ClassComponent
         // Switch
         switch($classComponent->type)
         {
+            case self::NEW_USE:
+                $this->uses[$classComponent->name] = $classComponent;
+            break;
+            case self::NEW_ATTRIBUTE:
+                $this->attributes[$classComponent->name] = $classComponent;
+            break;
             case self::NEW_CONSTANT:
                 $this->constants[$classComponent->name] = $classComponent;
             break;
@@ -376,16 +434,18 @@ class ClassComponent
         else
         {
             // Get content
+            $uses = array_map(function($use){ return $use->toString(); }, $this->uses);
+            $attributes = array_map(function($attribute){ return $attribute->toString(); }, $this->attributes);
             $constants = array_map(function($contant){ return $contant->toString(); }, $this->constants);
             $properties = array_map(function($property){ return $property->toString(); }, $this->properties);
             $methods = array_map(function($method){ return $method->toString(); }, $this->methods);
 
             // Create body
-            $body = implode("", $constants) . implode("", $properties) . implode("", $methods);
+            $body = implode("", $uses) . implode("", $attributes) . implode("", $constants) . implode("", $properties) . implode("", $methods);
         }
 
         // Return result
-        return sprintf("%s%s%s%s%s%s%s}", $docComment, $this->attributes, $definition, $this->name, $implementsExtends, $curlyBracketOnNewline, $body);
+        return sprintf("%s%s%s%s%s%s}", $docComment, $definition, $this->name, $implementsExtends, $curlyBracketOnNewline, $body);
     }
 
     /**
@@ -395,6 +455,10 @@ class ClassComponent
     {
         switch($this->type)
         {
+            case self::NEW_USE:
+                return $this->printUse();
+            case self::NEW_ATTRIBUTE:
+                return $this->printAttribute();
             case self::NEW_CONSTANT:
                 return $this->printConstant();
             case self::NEW_PROPERTY:
