@@ -152,12 +152,12 @@ class ClassParser extends LogEnabledClass
             return $this->slashComments[$index];
         }, $content);
 
+        $content = placeholder_restore($content, $this->methodBodies);
+
         $content = preg_replace_callback("/{{block-comment-(\d+)}}/", function($matches) {
             $index = intval($matches[1]);
             return $this->blockComments[$index];
         }, $content);
-
-        $content = placeholder_restore($content, $this->methodBodies);
 
         return $content;
     }
@@ -176,9 +176,6 @@ class ClassParser extends LogEnabledClass
      */
     public function parseClassBody(string $classBody)
     {
-        // Put methods in placeholders
-        $this->methodBodies = placeholder_replace("{", "}", $classBody);
-
         // Capture Block Comments
         $this->blockComments = [];
         $classBody = preg_replace_callback("/\/\*.+?(?=\*\/\n)\*\/\n/s", function($matches)
@@ -187,6 +184,9 @@ class ClassParser extends LogEnabledClass
             $this->blockComments[] = $matchString;
             return "{{block-comment-".(count($this->blockComments)-1)."}}";
         }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
+
+        // Put methods in placeholders
+        $this->methodBodies = placeholder_replace("{", "}", $classBody);
 
         // Replace slash comments with placeholders for later recovery
         $this->slashComments = [];

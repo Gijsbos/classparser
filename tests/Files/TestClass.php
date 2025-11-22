@@ -28,6 +28,8 @@ final class TestClass extends ClassObject
 
     /**
      * variable2
+     * @insert      <uuid4>
+     * @regexp      "/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/"
      */
     public static $variable2 = "/^[\p{Sc}\p{L}0-9!@#%^*&()-=+;:'\",.?\n ]{1,256}$/u"; // Variable 2
 
