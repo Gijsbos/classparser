@@ -47,6 +47,62 @@ class ClassObject extends \ReflectionClass
     }
 
     /**
+     * hasClassProperty
+     * 
+     *  Differs from ReflectionClass->hasProperty, this checks $this->properties
+     */
+    public function hasClassProperty(string $name)
+    {
+        foreach($this->properties as $property)
+        {
+            if(is_string($property))
+            {
+                if($property == $name)
+                    return true;
+            }
+            else
+            {
+                if($property->getName() == $name)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * hasClassMethod
+     * 
+     *  Differs from ReflectionClass->hasMethod, this checks $this->methods
+     */
+    public function hasClassMethod(string $name)
+    {
+        foreach($this->methods as $method)
+        {
+            if(is_string($method))
+            {
+                if($method == $name)
+                    return true;
+            }
+            else
+            {
+                if($method->getName() == $name)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * containsDefinitionWith
+     */
+    public function containsDefinitionWith(string $search)
+    {
+        return count(array_filter($this->definitions, fn($d) => str_contains($d, $search))) > 0;
+    }
+
+    /**
      * addDefinition
      */
     public function addDefinition(string $definition, null|int $definitionIndex = null)

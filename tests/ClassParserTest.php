@@ -18,6 +18,6 @@ final class ClassParserTest extends TestCase
 
         $classObject = $classObjectList[0];
 
-        $this->assertEquals($classObject->bodyHash, $classObject->calculateHash());
+        $this->assertEquals($classObject->bodyHash, $classObject->calculateClassObjectsHash());
     }
 }

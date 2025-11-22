@@ -19,9 +19,6 @@ class ClassMethod extends ReflectionMethod
     public string $definition = "";
     public null|int $definitionIndex = null;
 
-    /**
-     * __construct
-     */
     public function __construct($objectOrMethod, $method)
     {
         parent::__construct($objectOrMethod, $method);
