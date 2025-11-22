@@ -10,6 +10,7 @@ use gijsbos\ClassParser\Classes\ClassMethod;
 use gijsbos\ClassParser\Classes\ClassObject;
 use gijsbos\ClassParser\Classes\ClassProperty;
 use gijsbos\ClassParser\Classes\ClassTrait;
+use gijsbos\ExtFuncs\Utils\TextParser;
 use gijsbos\Logging\Classes\LogEnabledClass;
 use InvalidArgumentException;
 
@@ -133,13 +134,6 @@ class ClassParser extends LogEnabledClass
             return $this->parentheses[$index];
         }, $content);
 
-        $content = placeholder_restore($content, $this->methodBodies);
-
-        $content = preg_replace_callback("/{{quote-(\d+)}}/", function($matches) {
-            $index = intval($matches[1]);
-            return $this->quotes[$index];
-        }, $content);
-
         $content = preg_replace_callback("/{{hash-comment-(\d+)}}/", function($matches) {
             $index = intval($matches[1]);
             return $this->hashComments[$index];
@@ -148,6 +142,11 @@ class ClassParser extends LogEnabledClass
         $content = preg_replace_callback("/{{attribute-(\d+)}}/", function($matches) {
             $index = intval($matches[1]);
             return $this->attributes[$index];
+        }, $content);
+
+        $content = preg_replace_callback("/{{quote-(\d+)}}/", function($matches) {
+            $index = intval($matches[1]);
+            return $this->quotes[$index];
         }, $content);
 
         $content = preg_replace_callback("/{{slash-comment-(\d+)}}/", function($matches) {
@@ -159,6 +158,12 @@ class ClassParser extends LogEnabledClass
             $index = intval($matches[1]);
             return $this->blockComments[$index];
         }, $content);
+
+        $content = placeholder_restore($content, $this->methodBodies);
+
+        $content = TextParser::replaceInComments($content, "U+007D", "}");
+        $content = TextParser::replaceInComments($content, "U+007B", "{");
+        $content = TextParser::replaceInComments($content, "U+002B", "+");
 
         return $content;
     }
@@ -177,6 +182,13 @@ class ClassParser extends LogEnabledClass
      */
     public function parseClassBody(string $classBody)
     {
+        $classBody = TextParser::replaceInComments($classBody, "+", "U+002B");
+        $classBody = TextParser::replaceInComments($classBody, "{", "U+007B");
+        $classBody = TextParser::replaceInComments($classBody, "}", "U+007D");
+
+        // Put methods in placeholders
+        $this->methodBodies = placeholder_replace("{", "}", $classBody);
+
         // Capture Block Comments
         $this->blockComments = [];
         $classBody = preg_replace_callback("/\/\*.+?(?=\*\/\n)\*\/\n/s", function($matches)
@@ -194,6 +206,16 @@ class ClassParser extends LogEnabledClass
             $offset = $matches[0][1];
             $this->slashComments[] = $matchString;
             return "{{slash-comment-".(count($this->slashComments)-1)."}}";
+        }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
+
+        // Replace quoted strings for later recovery
+        $this->quotes = [];
+        $classBody = preg_replace_callback("/(['\"`])(.+?)(?<!\\\\)\\1/s", function($matches)
+        {
+            $matchString = $matches[0][0];
+            $offset = $matches[0][1];
+            $this->quotes[] = $matchString;
+            return "{{quote-".(count($this->quotes)-1)."}}";
         }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
 
         // Replace quoted strings for later recovery
@@ -216,20 +238,7 @@ class ClassParser extends LogEnabledClass
             return "{{hash-comment-".(count($this->hashComments)-1)."}}";
         }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
 
-        // Replace quoted strings for later recovery
-        $this->quotes = [];
-        $classBody = preg_replace_callback("/(['\"`])(.+?)(?<!\\\\)\\1/s", function($matches)
-        {
-            $matchString = $matches[0][0];
-            $offset = $matches[0][1];
-            $this->quotes[] = $matchString;
-            return "{{quote-".(count($this->quotes)-1)."}}";
-        }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
-
-        // Put methods in placeholders
-        $this->methodBodies = placeholder_replace("{", "}", $classBody);
-
-        // Les do dis
+        // Parse parentheses
         $this->parentheses = [];
         $classBody = replace_enclosed_function("(", ")", $classBody, function($value)
         {

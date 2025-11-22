@@ -106,6 +106,18 @@ final class TestClass extends ClassObject
         // Function comment
         return true;
     }
+
+    /**
+     * create
+     */
+    protected function _create(null|array $params = null, $flags = null, null|callable $onSuccess = null)
+    {
+        // Create Client
+        return parent::_create($params, $flags, function($data) use ($clientSecret, $scopes)
+        {
+            return ["clientId" => $clientId, "clientSecret" => $clientSecret];
+        });
+    }
 }
 
 // Extra
