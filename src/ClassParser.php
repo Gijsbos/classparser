@@ -11,6 +11,7 @@ use gijsbos\ClassParser\Classes\ClassObject;
 use gijsbos\ClassParser\Classes\ClassProperty;
 use gijsbos\ClassParser\Classes\ClassTrait;
 use gijsbos\Logging\Classes\LogEnabledClass;
+use InvalidArgumentException;
 
 /**
  * ClassParser
@@ -132,6 +133,13 @@ class ClassParser extends LogEnabledClass
             return $this->parentheses[$index];
         }, $content);
 
+        $content = placeholder_restore($content, $this->methodBodies);
+
+        $content = preg_replace_callback("/{{quote-(\d+)}}/", function($matches) {
+            $index = intval($matches[1]);
+            return $this->quotes[$index];
+        }, $content);
+
         $content = preg_replace_callback("/{{hash-comment-(\d+)}}/", function($matches) {
             $index = intval($matches[1]);
             return $this->hashComments[$index];
@@ -142,17 +150,10 @@ class ClassParser extends LogEnabledClass
             return $this->attributes[$index];
         }, $content);
 
-        $content = preg_replace_callback("/{{quote-(\d+)}}/", function($matches) {
-            $index = intval($matches[1]);
-            return $this->quotes[$index];
-        }, $content);
-
         $content = preg_replace_callback("/{{slash-comment-(\d+)}}/", function($matches) {
             $index = intval($matches[1]);
             return $this->slashComments[$index];
         }, $content);
-
-        $content = placeholder_restore($content, $this->methodBodies);
 
         $content = preg_replace_callback("/{{block-comment-(\d+)}}/", function($matches) {
             $index = intval($matches[1]);
@@ -185,9 +186,6 @@ class ClassParser extends LogEnabledClass
             return "{{block-comment-".(count($this->blockComments)-1)."}}";
         }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
 
-        // Put methods in placeholders
-        $this->methodBodies = placeholder_replace("{", "}", $classBody);
-
         // Replace slash comments with placeholders for later recovery
         $this->slashComments = [];
         $classBody = preg_replace_callback("/\/\/(?!.+;\s*\/\/).+/", function($matches)
@@ -196,16 +194,6 @@ class ClassParser extends LogEnabledClass
             $offset = $matches[0][1];
             $this->slashComments[] = $matchString;
             return "{{slash-comment-".(count($this->slashComments)-1)."}}";
-        }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
-
-        // Replace quoted strings for later recovery
-        $this->quotes = [];
-        $classBody = preg_replace_callback("/(['\"`])(.+?)(?<!\\\\)\\1/s", function($matches)
-        {
-            $matchString = $matches[0][0];
-            $offset = $matches[0][1];
-            $this->quotes[] = $matchString;
-            return "{{quote-".(count($this->quotes)-1)."}}";
         }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
 
         // Replace quoted strings for later recovery
@@ -227,6 +215,19 @@ class ClassParser extends LogEnabledClass
             $this->hashComments[] = $matchString;
             return "{{hash-comment-".(count($this->hashComments)-1)."}}";
         }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
+
+        // Replace quoted strings for later recovery
+        $this->quotes = [];
+        $classBody = preg_replace_callback("/(['\"`])(.+?)(?<!\\\\)\\1/s", function($matches)
+        {
+            $matchString = $matches[0][0];
+            $offset = $matches[0][1];
+            $this->quotes[] = $matchString;
+            return "{{quote-".(count($this->quotes)-1)."}}";
+        }, $classBody, -1, $count, PREG_OFFSET_CAPTURE);
+
+        // Put methods in placeholders
+        $this->methodBodies = placeholder_replace("{", "}", $classBody);
 
         // Les do dis
         $this->parentheses = [];
@@ -468,6 +469,9 @@ class ClassParser extends LogEnabledClass
      */
     private function readFile(string $filePath)
     {
+        if(!is_file($filePath))
+            throw new InvalidArgumentException("Argument 1 filePath '$filePath' is invalid, file does not exist");
+
         // Get file contents
         $fileContent = file_get_contents($filePath);
 
